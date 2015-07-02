@@ -1,13 +1,20 @@
-﻿using System.Linq;
-using Cake.Common.Diagnostics;
-using Cake.Common.IO;
-using Cake.Common.Tools.MSBuild;
-using Cake.Common.Tools.NuGet;
-using Cake.Core;
-using Cake.Tin;
-
+﻿// -----------------------------------------------------------------------
+// <copyright file="Build.cs" company="My Company">
+//     Copyright (c) 2015 My Company.
+// </copyright>
+// -----------------------------------------------------------------------
 namespace Build
 {
+    using System;
+    using System.Linq;
+
+    using Cake.Common.Diagnostics;
+    using Cake.Common.IO;
+    using Cake.Common.Tools.MSBuild;
+    using Cake.Common.Tools.NuGet;
+    using Cake.Core;
+    using Cake.Tin;
+
     public static class Program
     {
         /// <summary>
@@ -15,7 +22,7 @@ namespace Build
         /// </summary>
         public static void Main()
         {
-            // Execute or build
+            // Execute our build
             using (var build = new Build())
             {
                 build.Execute();
@@ -39,12 +46,15 @@ namespace Build
             ///////////////////////////////////////////////////////////////////////////////
             // GLOBAL VARIABLES
             ///////////////////////////////////////////////////////////////////////////////
-            var solutions = this.GetFiles("./**/*.sln");
+            var solutions = this.GetFiles("./**/*.sln")
+                  .Where(fp => !fp.ToString().ToLowerInvariant().EndsWith("build/build.sln"))
+                  .ToList();
+            this.Information("{0} solutions found in {1}.", solutions.Count, System.Environment.CurrentDirectory);
             var solutionPaths = solutions.Select(solution => solution.GetDirectory());
+
             ///////////////////////////////////////////////////////////////////////////////
             // SETUP / TEARDOWN
             ///////////////////////////////////////////////////////////////////////////////
-
             Setup(() =>
             {
                 // Executed BEFORE the first task.
@@ -60,7 +70,6 @@ namespace Build
             ///////////////////////////////////////////////////////////////////////////////
             // TASK DEFINITIONS
             ///////////////////////////////////////////////////////////////////////////////
-
             Task("Clean")
                     .Does(() =>
             {
@@ -104,14 +113,12 @@ namespace Build
             ///////////////////////////////////////////////////////////////////////////////
             // TARGETS
             ///////////////////////////////////////////////////////////////////////////////
-
             Task("Default")
                     .IsDependentOn("Build");
 
             ///////////////////////////////////////////////////////////////////////////////
             // EXECUTION
             ///////////////////////////////////////////////////////////////////////////////
-
             RunTarget(target);
         }
     }

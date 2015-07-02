@@ -27,9 +27,9 @@ http://cakebuild.net
 
 Param(
     [string]$Solution = "Build\Build.sln",
-	[string]$SolutionExe = "Build\\Build.sln",
-    [string]$Target = "Default",
     [string]$Configuration = "Release",
+    [string]$BuildExe = "Build\bin\$Configuration\Build.exe",
+    [string]$Target = "Default",
     [ValidateSet("Quiet", "Minimal", "Normal", "Verbose", "Diagnostic")]
     [string]$Verbosity = "Verbose",
     [Alias("DryRun","Noop")]
@@ -41,7 +41,8 @@ $LIB_DIR = Join-Path $PSScriptRoot "Build\lib"
 $NUGET_EXE = Join-Path $LIB_DIR "nuget.exe"
 $CAKETIN_DLL = Join-Path $LIB_DIR "Cake.Tin\Cake.Tin.dll"
 $PACKAGES_CONFIG = Join-Path $LIB_DIR "packages.config"
-$Solution =Join-Path $PSScriptRoot $Solution
+$Solution = Join-Path $PSScriptRoot $Solution
+$BuildExe =  Join-Path $PSScriptRoot $BuildExe
 
 # Should we use the new Roslyn?
 $UseExperimental = "";
@@ -108,13 +109,41 @@ if (!(Test-Path $CAKETIN_DLL)) {
     Throw "Could not find " + $CAKETIN_DLL
 }
 
-# Start Cake
+$zipFile = Join-Path $PSScriptRoot "caketinbuild.zip"
+$slnExists = Test-Path $Solution
+$zipExists = Test-Path $zipFile
+
+if ($zipExists -and $slnExists) {
+    Throw "Found caketinbuild.zip and a build sln. Only one or other should be present($Solution)."
+}
+
+if ($zipExists) {
+	Write-Host "Extracting zip"
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+	$targetFolder = Join-Path $PSScriptRoot "Build"
+	[System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $targetFolder)
+}
+
+$slnExists = Test-Path $Solution
+if (!($slnExists)) {
+    Throw "Unable to find '$Solution'."
+}
+
+if ($zipExists) {
+    Move-Item $zipFile $targetFolder
+}
+
+
+# Load Cake Tin and build the Build Sln
 add-type -path $CAKETIN_DLL
-Write-Host "Building $Solution"
-$result = [Cake.Tin.BuildCompiler]::Compile($Solution)
-Write-Host "Done building - $result"
-if ($result eq "Success") {
-	Invoke-Expression "$CAKETIN_DLL `"$Script`" -target=`"$Target`" -configuration=`"$Configuration`" -verbosity=`"$Verbosity`" $UseDryRun $UseExperimental"
+Write-Host "Pre Build: building $Solution, -configuration=`"$Configuration`""
+$result = [Cake.Tin.BuildCompiler]::Compile($Solution, "-configuration=`"$Configuration`"" )
+Write-Host "Pre-build complete - $result"
+if ($result -eq "Success") {
+    # Finally, run the actual build 
+	$command = "$BuildExe -target=`"$Target`" -configuration=`"$Configuration`" -verbosity=`"$Verbosity`" $UseDryRun $UseExperimental"
+	Write-Host "Executing: $command"
+	Invoke-Expression $command
 	exit $LASTEXITCODE
 }
 else
